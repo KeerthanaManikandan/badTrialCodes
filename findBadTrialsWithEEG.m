@@ -15,7 +15,6 @@ subjectFolder = fullfile('D:\Extracted_Data\EEG\AgeProjectRound1',subjectName);
 
 protocolName = 'GAV_0003';
 channelsNotForConsideration = [65 66]; % TODO: [33 34]
-% filtSwitch = 1;
 highPassCutOff = 1; % Hz
 FsEye = 500; % Hz
 checkPeriod = [-0.500 0.750]; % s
@@ -23,6 +22,7 @@ impedanceTag = 'Start'; % Start or End
 ImpedanceCutOff = 25; % KOhm
 threshold = 6;
 badTrialThreshold = 30; % Percentage
+badElecThreshold = 10; % Percentage
 
 folderName = fullfile(subjectFolder,expDate,protocolName);
 folderSegment = fullfile(folderName,'segmentedData');
@@ -52,17 +52,6 @@ else
     badEyeTrials = [];
 end
 
-% BT{1} = badEyeTrials; % Stage 1
-% BT{1} = ones(numElectrodes,1)*badEyeTrials; % Stage 1
-
-% 2. As per electrode impedance
-% Code based on sample file "readImpedanceValues.m"
-% if ~exist(fullfile(subjectFolder,expDate,'ImpedanceValues.mat'))
-%     [elecNames,elecImp] = getImpedanceDataEEG(dataFolder,subjectFolder,expDate);
-% else
-%     load(fullfile(subjectFolder,'EEG',expDate,'ImpedanceValues.mat'));
-% end
-
 % Get electrode impedances
 filenameAtStart = fullfile(folderIn,[subjectName expDate],[subjectName expDate 'GAV_ImpedanceAt' impedanceTag '.txt']);
 [elecNames,elecImpedance] = getImpedanceEEG(filenameAtStart);
@@ -76,10 +65,6 @@ for iML = 1:length(electrodeLabelsList)
 end
 elecImpedance = elecImpedance(elecInds);
 GoodElec_Z = elecImpedance<ImpedanceCutOff;
-
-% allBadTrials = cell(1,numElectrodes);
-% nameElec = cell(1,numElectrodes);
-% BT = cell(0);
 
 % Set MT parameters
 params.tapers   = [3 5];
@@ -104,9 +89,8 @@ for iElec=1:numElectrodes
     
     analogData = load(fullfile(folderSegment,'LFP',['elec' num2str(electrodeNum) '.mat']),'analogData');
     analogData = analogData.analogData;
-%     nameElec{iElec} = ['elec' num2str(electrodeNum)];
     
-    analogDataOriginal = analogData;
+    analogDataAllElecs(iElec,:,:) = analogData;
     analogData(badEyeTrials,:) = [];
     
     if exist('highPassCutOff','var') || ~isempty(highPassCutOff)
@@ -155,10 +139,11 @@ for iElec=1:numElectrodes
     tmpBadTrailsAll = unique([tmpBadTrialsTime;tmpBadTrialsPSD]);
     
     % Remap bad trail indices to original indices
-    originalTrialInds = 1:size(analogDataOriginal,1);
+    originalTrialInds = 1:size(analogDataAllElecs,2);
     originalTrialInds(badEyeTrials) = [];
     allBadTrials{iElec} = originalTrialInds(tmpBadTrailsAll);
 
+    
 end
 close(hW1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -181,23 +166,15 @@ for iTrial = 1:length(badTrials)
         end
     end
 end
-% tolerance = mean(badTrialElecs)/numElectrodes;
-badTrialsNew = [];
-    for iTrials=1:numTrials
-        trialCount=0;
-        for iElec=1:numElectrodes
-%             j = checkTheseElectrodes(i);
-            if isnan(allBadTrials{iElec}); continue; end
-            if ~isempty(find(allBadTrials{iElec} == iTrials, 1))
-                trialCount=trialCount+1;
-            end
-        end
-        trialPercent = trialCount/numElectrodes;
-        if trialPercent>=tolerance
-            badTrialsNew = cat(1,badTrialsNew,iTrials);
-        end
-    end
-   
 
+badTrials(badTrialElecs<(badElecThreshold/100.*numElectrodes))=[];
+
+   
+% For plotting
+for iElec=1:numElectrodes
+    clear blPowerVsFreq freqVals
+    params.trialav
+    [powerVsFreq,freqVals] = mtspectrumc(squeeze(analogDataAllElecs(iElec,badTrials,:))',params);
+end
 
 % end
